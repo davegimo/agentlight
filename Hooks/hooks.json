@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "./hooks/agentlight-event.sh sessionStart"
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "./hooks/agentlight-event.sh sessionEnd"
+      }
+    ],
+    "stop": [
+      {
+        "command": "./hooks/agentlight-event.sh stop"
+      }
+    ],
+    "afterAgentResponse": [
+      {
+        "command": "./hooks/agentlight-event.sh afterAgentResponse"
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "./hooks/agentlight-event.sh postToolUse"
+      }
+    ],
+    "postToolUseFailure": [
+      {
+        "command": "./hooks/agentlight-event.sh postToolUseFailure"
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "./hooks/agentlight-event.sh afterFileEdit"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "./hooks/agentlight-event.sh beforeShellExecution"
+      }
+    ],
+    "beforeMCPExecution": [
+      {
+        "command": "./hooks/agentlight-event.sh beforeMCPExecution"
+      }
+    ],
+    "subagentStart": [
+      {
+        "command": "./hooks/agentlight-event.sh subagentStart"
+      }
+    ],
+    "subagentStop": [
+      {
+        "command": "./hooks/agentlight-event.sh subagentStop"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "./hooks/agentlight-needs-input.sh",
+        "matcher": "AskQuestion"
+      }
+    ]
+  }
+}
