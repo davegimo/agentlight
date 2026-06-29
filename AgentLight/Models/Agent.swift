@@ -17,9 +17,17 @@ struct Agent: Identifiable, Codable, Sendable, Equatable {
         }
     }
 
+    var workspaceFolderName: String {
+        if let path = workspacePath, !path.isEmpty {
+            return (path as NSString).lastPathComponent
+        }
+        if !name.isEmpty, name != providerDisplayName {
+            return name
+        }
+        return providerDisplayName
+    }
+
     var statusLine: String {
-        let task = taskDescription?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let taskPart = (task?.isEmpty == false) ? " — \(task!)" : ""
-        return "\(providerDisplayName)\(taskPart) — \(state.emoji) \(state.displayName)"
+        "\(workspaceFolderName) — \(state.emoji) \(state.displayName)"
     }
 }

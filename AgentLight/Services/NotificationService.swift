@@ -21,26 +21,23 @@ final class NotificationService {
         switch agent.state {
         case .done:
             guard settings.notifyOnComplete else { return }
-            let task = agent.taskDescription ?? "task"
             send(
-                title: "\(agent.providerDisplayName) completed",
-                body: "\(agent.providerDisplayName) completed \(task). Click to open.",
+                title: "\(agent.workspaceFolderName) — done",
+                body: "Task finished in \(agent.workspaceFolderName). Click to return to Cursor.",
                 agent: agent
             )
         case .needsInput:
             guard settings.notifyOnNeedsInput else { return }
-            let task = agent.taskDescription ?? "your agent"
             send(
-                title: "\(agent.providerDisplayName) needs you",
-                body: "\(agent.providerDisplayName) is waiting for approval on \(task). Click to open.",
+                title: "\(agent.workspaceFolderName) — waiting for you",
+                body: "Cursor needs your input on \(agent.workspaceFolderName). Click to open.",
                 agent: agent
             )
         case .failed:
             guard settings.notifyOnFailed else { return }
-            let task = agent.taskDescription ?? "task"
             send(
-                title: "Agent failed",
-                body: "\(agent.providerDisplayName) failed on \(task). Click to open.",
+                title: "\(agent.workspaceFolderName) — failed",
+                body: "Something went wrong in \(agent.workspaceFolderName). Click to open.",
                 agent: agent
             )
         default:

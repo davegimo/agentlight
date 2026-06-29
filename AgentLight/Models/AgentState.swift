@@ -11,7 +11,7 @@ enum AgentState: String, Codable, CaseIterable, Sendable {
         switch self {
         case .working: return "Running"
         case .done: return "Done"
-        case .needsInput: return "Needs input"
+        case .needsInput: return "Waiting for you"
         case .failed: return "Failed"
         case .stopped: return "Stopped"
         }

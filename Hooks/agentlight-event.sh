@@ -16,11 +16,11 @@ AGENTLIGHT_EVENT=$(map_hook_to_event "$HOOK_NAME")
 if [[ -n "$AGENTLIGHT_EVENT" ]]; then
   phase=""
   case "$HOOK_NAME" in
-    postToolUse|afterShellExecution|afterMCPExecution)
+    postToolUse|afterShellExecution|afterMCPExecution|beforeShellExecution|beforeMCPExecution)
       phase="executing"
       ;;
   esac
-  if [[ "$AGENTLIGHT_EVENT" == "agent_needs_input" ]]; then
+  if [[ "$AGENTLIGHT_EVENT" == "agent_needs_input" ]] || [[ "$phase" == "executing" ]]; then
     send_event "$AGENTLIGHT_EVENT" "$INPUT" "$phase"
   else
     send_event "$AGENTLIGHT_EVENT" "$INPUT" "$phase" &

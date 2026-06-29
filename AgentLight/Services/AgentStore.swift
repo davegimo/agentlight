@@ -133,6 +133,10 @@ final class AgentStore: ObservableObject {
     }
 
     private func applyNeedsInput(from event: AgentEvent) {
+        if agents.first(where: { $0.id == event.agentID })?.state == .working {
+            return
+        }
+
         let previousState = agents.first(where: { $0.id == event.agentID })?.state
         isReadyForNextRequest = false
         upsertAgent(from: event, state: .needsInput, setStartedAt: false)

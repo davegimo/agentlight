@@ -10,7 +10,10 @@ map_hook_to_event() {
     sessionEnd) echo "agent_stopped" ;;
     stop) echo "agent_completed" ;;
     postToolUseFailure) echo "agent_failed" ;;
-    beforeShellExecution|beforeMCPExecution|subagentStart)
+    beforeShellExecution|beforeMCPExecution)
+      echo "agent_running"
+      ;;
+    subagentStart)
       echo "agent_needs_input"
       ;;
     postToolUse|afterShellExecution|afterMCPExecution)
