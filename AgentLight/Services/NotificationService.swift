@@ -45,18 +45,36 @@ final class NotificationService {
         }
     }
 
+    func notifyApprovalRequired(_ approval: PendingApproval) {
+        send(
+            title: "\(approval.workspaceFolderName) — approval needed",
+            body: approval.detail,
+            userInfo: [
+                "workspace": approval.workspacePath ?? "",
+                "provider": approval.providerID,
+                "agent_id": approval.agentID,
+                "approval_id": approval.id,
+            ]
+        )
+    }
+
     private func send(title: String, body: String, agent: Agent) {
+        var userInfo: [String: String] = [
+            "provider": agent.providerID,
+            "agent_id": agent.id,
+        ]
+        if let workspace = agent.workspacePath {
+            userInfo["workspace"] = workspace
+        }
+        send(title: title, body: body, userInfo: userInfo)
+    }
+
+    private func send(title: String, body: String, userInfo: [String: String]) {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
-        if let workspace = agent.workspacePath {
-            content.userInfo = [
-                "workspace": workspace,
-                "provider": agent.providerID,
-                "agent_id": agent.id,
-            ]
-        }
+        content.userInfo = userInfo
 
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,

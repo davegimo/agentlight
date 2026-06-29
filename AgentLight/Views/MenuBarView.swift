@@ -6,6 +6,13 @@ struct MenuBarView: View {
     @Binding var showSettings: Bool
 
     var body: some View {
+        if !store.pendingApprovals.isEmpty {
+            ForEach(store.pendingApprovals) { approval in
+                approvalSection(approval)
+            }
+            Divider()
+        }
+
         if store.canOpenFocusTarget {
             Button(store.focusActionLabel) {
                 store.openFocusTarget()
@@ -54,6 +61,32 @@ struct MenuBarView: View {
     }
 
     @ViewBuilder
+    private func approvalSection(_ approval: PendingApproval) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("🔴 \(approval.workspaceFolderName) — approval needed")
+                .font(.system(size: 13, weight: .semibold))
+            Text(approval.title)
+                .font(.caption)
+            Text(approval.detail)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+            Text("Also visible in Cursor — Allow clicks Run there")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            HStack {
+                Button("Allow") {
+                    store.approve(approval)
+                }
+                Button("Deny") {
+                    store.deny(approval)
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
     private func agentRow(_ agent: Agent) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(agent.statusLine)
@@ -94,6 +127,10 @@ struct SettingsView: View {
             }
 
             Section("Cursor Integration") {
+                Toggle("Approve from menu bar", isOn: $settings.approveFromMenuBar)
+                Text("Shell (non-sandbox), MCP, Write, Delete, Task, WebSearch, WebFetch, and other tools that need approval.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Text("Install hooks with:")
                     .font(.caption)
                     .foregroundStyle(.secondary)

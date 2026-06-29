@@ -11,6 +11,11 @@ struct ServerConfig: Codable {
     }
 }
 
+struct ApprovalRespondRequest: Codable {
+    let id: String
+    let decision: ApprovalDecision?
+}
+
 final class EventServer: @unchecked Sendable {
     static let defaultPort: UInt16 = 47_831
 
@@ -131,12 +136,13 @@ final class EventServer: @unchecked Sendable {
         let method = String(parts[0])
         let path = String(parts[1])
 
-        guard method == "POST", path == "/event" || path == "/event/" else {
-            if method == "GET", path == "/health" || path == "/health/" {
-                sendResponse(connection: connection, status: "200 OK", body: "{\"status\":\"ok\"}")
-            } else {
-                sendResponse(connection: connection, status: "404 Not Found", body: "{\"error\":\"not found\"}")
-            }
+        if method == "GET", path == "/health" || path == "/health/" {
+            sendResponse(connection: connection, status: "200 OK", body: "{\"status\":\"ok\"}")
+            return
+        }
+
+        guard method == "POST" else {
+            sendResponse(connection: connection, status: "404 Not Found", body: "{\"error\":\"not found\"}")
             return
         }
 
@@ -151,14 +157,24 @@ final class EventServer: @unchecked Sendable {
             return
         }
 
+        switch path {
+        case "/event", "/event/":
+            handleEvent(bodyData, connection: connection)
+        case "/approval/pending", "/approval/pending/":
+            handleApprovalPending(bodyData, connection: connection)
+        case "/approval/respond", "/approval/respond/":
+            handleApprovalRespond(bodyData, connection: connection)
+        default:
+            sendResponse(connection: connection, status: "404 Not Found", body: "{\"error\":\"not found\"}")
+        }
+    }
+
+    private func handleEvent(_ bodyData: Data, connection: NWConnection) {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let value = try container.decode(String.self)
-            let formatters = [
-                ISO8601DateFormatter(),
-            ]
-            if let date = formatters[0].date(from: value) {
+            if let date = ISO8601DateFormatter().date(from: value) {
                 return date
             }
             let fallback = ISO8601DateFormatter()
@@ -176,6 +192,29 @@ final class EventServer: @unchecked Sendable {
         } catch {
             NSLog("AgentLight: failed to decode event — \(error.localizedDescription)")
             sendResponse(connection: connection, status: "422 Unprocessable Entity", body: "{\"error\":\"invalid event\"}")
+        }
+    }
+
+    private func handleApprovalPending(_ bodyData: Data, connection: NWConnection) {
+        let decoder = JSONDecoder()
+        do {
+            let request = try decoder.decode(ApprovalRequest.self, from: bodyData)
+            let pending = ApprovalManager.shared.register(request: request)
+            let body = "{\"status\":\"ok\",\"id\":\"\(pending.id)\"}"
+            sendResponse(connection: connection, status: "200 OK", body: body)
+        } catch {
+            sendResponse(connection: connection, status: "422 Unprocessable Entity", body: "{\"error\":\"invalid approval request\"}")
+        }
+    }
+
+    private func handleApprovalRespond(_ bodyData: Data, connection: NWConnection) {
+        let decoder = JSONDecoder()
+        do {
+            let request = try decoder.decode(ApprovalRespondRequest.self, from: bodyData)
+            ApprovalManager.shared.dismiss(id: request.id)
+            sendResponse(connection: connection, status: "200 OK", body: "{\"status\":\"ok\"}")
+        } catch {
+            sendResponse(connection: connection, status: "422 Unprocessable Entity", body: "{\"error\":\"invalid respond request\"}")
         }
     }
 

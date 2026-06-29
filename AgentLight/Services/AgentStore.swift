@@ -7,6 +7,7 @@ final class AgentStore: ObservableObject {
     @Published private(set) var agents: [Agent] = []
     @Published private(set) var aggregateState: AggregateState = .idle
     @Published private(set) var focusContext: AgentFocusContext?
+    @Published private(set) var pendingApprovals: [PendingApproval] = []
 
     private var providers: [String: any AgentProvider] = [:]
     private var isReadyForNextRequest = false
@@ -23,6 +24,72 @@ final class AgentStore: ObservableObject {
 
     private init() {
         focusContext = loadFocusContext()
+    }
+
+    func configureApprovalCallbacks() {
+        ApprovalManager.shared.onPending = { pending in
+            Task { @MainActor in
+                AgentStore.shared.registerPendingApproval(pending)
+            }
+        }
+        ApprovalManager.shared.onResolved = { id in
+            Task { @MainActor in
+                AgentStore.shared.pendingApprovals.removeAll { $0.id == id }
+            }
+        }
+    }
+
+    func approve(_ approval: PendingApproval) {
+        if let path = approval.workspacePath, !path.isEmpty {
+            WorkspaceOpener.open(providerID: approval.providerID, workspacePath: path)
+        }
+        CursorApprovalDriver.approve()
+        ApprovalManager.shared.dismiss(id: approval.id)
+        finishApproval(approval, allowed: true)
+    }
+
+    func deny(_ approval: PendingApproval) {
+        if let path = approval.workspacePath, !path.isEmpty {
+            WorkspaceOpener.open(providerID: approval.providerID, workspacePath: path)
+        }
+        CursorApprovalDriver.deny()
+        ApprovalManager.shared.dismiss(id: approval.id)
+        finishApproval(approval, allowed: false)
+    }
+
+    private func finishApproval(_ approval: PendingApproval, allowed: Bool) {
+        pendingApprovals.removeAll { $0.id == approval.id }
+        if allowed {
+            if let index = agents.firstIndex(where: { $0.id == approval.agentID }) {
+                agents[index].state = .working
+                agents[index].lastUpdated = Date()
+            }
+        }
+        recalculateAggregate()
+    }
+
+    private func registerPendingApproval(_ approval: PendingApproval) {
+        pendingApprovals.removeAll { $0.id == approval.id }
+        pendingApprovals.insert(approval, at: 0)
+
+        let event = AgentEvent(
+            event: .agentNeedsInput,
+            provider: approval.providerID,
+            agentID: approval.agentID,
+            task: approval.detail,
+            timestamp: approval.createdAt,
+            metadata: [
+                "workspace": approval.workspacePath ?? "",
+                "tool": approval.kind.rawValue,
+                "hook": "approval",
+                "immediate": "true",
+            ]
+        )
+        applyNeedsInput(from: event)
+
+        if AppSettings.shared.notifyOnNeedsInput {
+            NotificationService.shared.notifyApprovalRequired(approval)
+        }
     }
 
     var canOpenFocusTarget: Bool {
@@ -86,6 +153,7 @@ final class AgentStore: ObservableObject {
 
             if confirmsExecution {
                 cancelPendingNeedsInput(for: event.agentID)
+                pendingApprovals.removeAll { $0.agentID == event.agentID }
                 isReadyForNextRequest = false
             }
             upsertAgent(

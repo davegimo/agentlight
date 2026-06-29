@@ -130,11 +130,28 @@ task = (
     or data.get('task')
     or data.get('message')
     or data.get('command')
-    or (data.get('tool_input') or {}).get('command') if isinstance(data.get('tool_input'), dict) else None
-    or data.get('tool_name')
-    or data.get('toolName')
     or ''
 )
+
+tool_input = data.get('tool_input') if isinstance(data.get('tool_input'), dict) else {}
+if not task and tool_input:
+    task = (
+        tool_input.get('command')
+        or tool_input.get('path')
+        or tool_input.get('file_path')
+        or tool_input.get('target_file')
+        or tool_input.get('target_notebook')
+        or tool_input.get('search_term')
+        or tool_input.get('query')
+        or tool_input.get('url')
+        or tool_input.get('description')
+        or tool_input.get('prompt')
+        or tool_input.get('contents')
+        or tool_input.get('old_string')
+        or ''
+    )
+if not task:
+    task = data.get('tool_name') or data.get('toolName') or ''
 
 roots = data.get('workspace_roots') or data.get('workspaceRoots') or []
 workspace = (
@@ -254,4 +271,71 @@ except Exception:
     raise SystemExit
 print('true' if data.get('sandbox') is True else 'false')
 " 2>/dev/null || echo "false"
+}
+
+emit_permission_response() {
+  local decision="${1:-allow}"
+  case "$decision" in
+    allow)
+      echo '{"permission":"allow"}'
+      ;;
+    ask)
+      echo '{"permission":"ask","user_message":"Approve in Cursor or from the AgentLight menu bar"}'
+      ;;
+    *)
+      echo '{"permission":"deny","user_message":"Denied from AgentLight menu bar"}'
+      ;;
+  esac
+}
+
+should_use_menu_bar_approval() {
+  local port
+  port=$(read_port)
+
+  if ! curl -s -m 1 "http://127.0.0.1:${port}/health" >/dev/null 2>&1; then
+    return 1
+  fi
+
+  if [[ -f "$CONFIG_FILE" ]]; then
+    python3 -c "
+import json
+try:
+    with open('$CONFIG_FILE') as f:
+        enabled = json.load(f).get('approve_from_menu_bar', True)
+    raise SystemExit(0 if enabled else 1)
+except Exception:
+    raise SystemExit(0)
+" 2>/dev/null
+    return $?
+  fi
+
+  return 0
+}
+
+notify_menu_bar_approval() {
+  local hook_name="$1"
+  local input="$2"
+  local port
+  port=$(read_port)
+
+  local fields payload
+  fields=$(extract_fields "$input")
+
+  payload=$(echo "$fields" | HOOK_NAME="$hook_name" python3 -c "
+import json, os, sys
+fields = json.load(sys.stdin)
+print(json.dumps({
+    'hook': os.environ.get('HOOK_NAME', ''),
+    'agent_id': fields.get('agent_id', 'default'),
+    'task': fields.get('task') or None,
+    'workspace': fields.get('workspace') or None,
+    'tool': fields.get('tool') or None,
+}))
+")
+
+  log_hook "$hook_name" "notify menu bar approval"
+  curl -s -m 2 -X POST \
+    -H "Content-Type: application/json" \
+    -d "$payload" \
+    "http://127.0.0.1:${port}/approval/pending" >/dev/null 2>&1 &
 }

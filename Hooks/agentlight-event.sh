@@ -10,17 +10,59 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=agentlight-common.sh
 source "$SCRIPT_DIR/agentlight-common.sh"
 
+emit_permission() {
+  emit_permission_response "$1"
+}
+
+handle_permission_hook() {
+  local hook_name="$1"
+  local input="$2"
+
+  if [[ "$hook_name" == "beforeShellExecution" ]]; then
+    local sandbox
+    sandbox=$(echo "$input" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    print('false')
+    raise SystemExit
+print('true' if data.get('sandbox') is True else 'false')
+" 2>/dev/null || echo "false")
+
+    log_hook "$hook_name" "sandbox=$sandbox"
+
+    if [[ "$sandbox" == "true" ]]; then
+      send_event "agent_running" "$input" "executing" "false" "$hook_name"
+      emit_permission_response "allow"
+      exit 0
+    fi
+  fi
+
+  if should_use_menu_bar_approval; then
+    notify_menu_bar_approval "$hook_name" "$input"
+    send_event "agent_needs_input" "$input" "" "true" "$hook_name" &
+    emit_permission_response "ask"
+    exit 0
+  fi
+
+  send_event "agent_needs_input" "$input" "" "true" "$hook_name" &
+  emit_permission_response "allow"
+  exit 0
+}
+
+case "$HOOK_NAME" in
+  beforeShellExecution|beforeMCPExecution|subagentStart)
+    handle_permission_hook "$HOOK_NAME" "$INPUT"
+    ;;
+esac
+
 AGENTLIGHT_EVENT=$(resolve_hook_event "$HOOK_NAME" "$INPUT")
 
 phase=""
 case "$HOOK_NAME" in
   postToolUse|afterShellExecution|afterMCPExecution)
     phase="executing"
-    ;;
-  beforeShellExecution)
-    if [[ "$AGENTLIGHT_EVENT" == "agent_running" ]]; then
-      phase="executing"
-    fi
     ;;
 esac
 
@@ -51,7 +93,7 @@ print(data.get('tool_name') or data.get('toolName') or data.get('tool') or '')
 fi
 
 case "$HOOK_NAME" in
-  beforeShellExecution|beforeMCPExecution|subagentStart|preToolUse)
+  preToolUse)
     echo '{"permission":"allow"}'
     ;;
   stop|subagentStop)

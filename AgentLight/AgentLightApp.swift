@@ -25,8 +25,10 @@ struct AgentLightApp: App {
 
         let cursor = CursorProvider()
         Task { @MainActor in
+            AgentStore.shared.configureApprovalCallbacks()
             AgentStore.shared.register(provider: cursor)
             AgentStore.shared.startProviders()
+            AppSettings.shared.writeServerConfig(port: EventServer.defaultPort)
             NotificationService.shared.requestAuthorization()
         }
     }
