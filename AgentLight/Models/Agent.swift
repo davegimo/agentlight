@@ -5,6 +5,7 @@ struct Agent: Identifiable, Codable, Sendable, Equatable {
     let providerID: String
     var name: String
     var taskDescription: String?
+    var workspacePath: String?
     var state: AgentState
     var lastUpdated: Date
     var startedAt: Date?

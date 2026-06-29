@@ -10,10 +10,16 @@ map_hook_to_event() {
     sessionEnd) echo "agent_stopped" ;;
     stop) echo "agent_completed" ;;
     postToolUseFailure) echo "agent_failed" ;;
-    afterAgentResponse|postToolUse|afterFileEdit|beforeShellExecution|beforeMCPExecution|subagentStart|subagentStop)
+    beforeShellExecution|beforeMCPExecution|subagentStart)
+      echo "agent_needs_input"
+      ;;
+    postToolUse|afterShellExecution|afterMCPExecution)
       echo "agent_running"
       ;;
-    preToolUse) echo "agent_running" ;;
+    afterAgentResponse|afterFileEdit|subagentStop)
+      echo "agent_running"
+      ;;
+    preToolUse) echo "" ;;
     *) echo "" ;;
   esac
 }
@@ -47,6 +53,8 @@ except json.JSONDecodeError:
 agent_id = (
     data.get('conversation_id')
     or data.get('conversationId')
+    or data.get('generation_id')
+    or data.get('generationId')
     or data.get('session_id')
     or data.get('sessionId')
     or data.get('chat_id')
@@ -58,20 +66,25 @@ task = (
     data.get('prompt')
     or data.get('user_prompt')
     or data.get('userPrompt')
+    or data.get('agent_message')
+    or data.get('agentMessage')
     or data.get('task')
     or data.get('message')
     or data.get('command')
+    or (data.get('tool_input') or {}).get('command') if isinstance(data.get('tool_input'), dict) else None
     or data.get('tool_name')
     or data.get('toolName')
     or ''
 )
 
+roots = data.get('workspace_roots') or data.get('workspaceRoots') or []
 workspace = (
     data.get('workspace')
     or data.get('workspace_path')
     or data.get('workspacePath')
     or data.get('cwd')
     or data.get('root')
+    or (roots[0] if isinstance(roots, list) and roots else '')
     or ''
 )
 
@@ -89,6 +102,7 @@ print(json.dumps({
 send_event() {
   local event_type="$1"
   local input="$2"
+  local phase="${3:-}"
   local port
   port=$(read_port)
 
@@ -107,16 +121,20 @@ send_event() {
   local payload
   payload=$(python3 -c "
 import json
+metadata = {
+    'workspace': '''${workspace//\'/}''',
+    'tool': '''${tool//\'/}'''
+}
+phase = '''${phase}'''
+if phase:
+    metadata['phase'] = phase
 print(json.dumps({
     'event': '$event_type',
     'provider': 'cursor',
     'agent_id': '''${agent_id//\'/}''',
     'task': '''${task//\'/}''' or None,
     'timestamp': '$timestamp',
-    'metadata': {
-        'workspace': '''${workspace//\'/}''',
-        'tool': '''${tool//\'/}'''
-    }
+    'metadata': metadata
 }))
 ")
 

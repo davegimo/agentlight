@@ -13,12 +13,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/agentlight-common.sh"
 
 AGENTLIGHT_EVENT=$(map_hook_to_event "$HOOK_NAME")
-if [[ -z "$AGENTLIGHT_EVENT" ]]; then
-  echo '{}'
-  exit 0
+if [[ -n "$AGENTLIGHT_EVENT" ]]; then
+  phase=""
+  case "$HOOK_NAME" in
+    postToolUse|afterShellExecution|afterMCPExecution)
+      phase="executing"
+      ;;
+  esac
+  send_event "$AGENTLIGHT_EVENT" "$INPUT" "$phase" &
 fi
-
-send_event "$AGENTLIGHT_EVENT" "$INPUT" &
 
 # Hooks that require a response must still return valid JSON.
 case "$HOOK_NAME" in

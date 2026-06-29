@@ -59,7 +59,7 @@
     "preToolUse": [
       {
         "command": "./hooks/agentlight-needs-input.sh",
-        "matcher": "AskQuestion"
+        "matcher": "Shell|Write|Delete|Task|AskQuestion|MCP:"
       }
     ]
   }

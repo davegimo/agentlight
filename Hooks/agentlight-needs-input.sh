@@ -1,5 +1,5 @@
 #!/bin/bash
-# Detects when Cursor is waiting for user input (AskQuestion tool).
+# Detects when Cursor is waiting for user approval or input.
 
 set -euo pipefail
 
@@ -17,10 +17,19 @@ except Exception:
     print('')
 " 2>/dev/null || echo "")
 
-if [[ "$TOOL" == "AskQuestion" ]]; then
+needs_approval=false
+case "$TOOL" in
+  Shell|Write|Delete|Task|AskQuestion)
+    needs_approval=true
+    ;;
+  MCP:*)
+    needs_approval=true
+    ;;
+esac
+
+if [[ "$needs_approval" == "true" ]]; then
   send_needs_input "$INPUT" &
 fi
 
-send_event "agent_running" "$INPUT" &
 echo '{"permission":"allow"}'
 exit 0

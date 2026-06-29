@@ -38,7 +38,7 @@ final class AgentStore: ObservableObject {
             isReadyForNextRequest = false
             upsertAgent(from: event, state: .working, setStartedAt: true)
         case .agentRunning:
-            upsertAgent(from: event, state: .working, setStartedAt: false, allowFromDone: false)
+            upsertAgent(from: event, state: .working, setStartedAt: false, allowFromDone: false, allowFromNeedsInput: event.metadata?["phase"] == "executing")
         case .agentCompleted:
             isReadyForNextRequest = true
             upsertAgent(from: event, state: .done, setStartedAt: false)
@@ -77,7 +77,8 @@ final class AgentStore: ObservableObject {
         from event: AgentEvent,
         state: AgentState,
         setStartedAt: Bool,
-        allowFromDone: Bool = true
+        allowFromDone: Bool = true,
+        allowFromNeedsInput: Bool = true
     ) {
         let now = event.timestamp
         if let index = agents.firstIndex(where: { $0.id == event.agentID }) {
@@ -87,6 +88,17 @@ final class AgentStore: ObservableObject {
                 if let task = event.task, !task.isEmpty {
                     agent.taskDescription = task
                 }
+                mergeMetadata(from: event, into: &agent)
+                agents[index] = agent
+                agents.sort { $0.lastUpdated > $1.lastUpdated }
+                return
+            }
+            if agent.state == .needsInput && state == .working && !allowFromNeedsInput {
+                agent.lastUpdated = now
+                if let task = event.task, !task.isEmpty {
+                    agent.taskDescription = task
+                }
+                mergeMetadata(from: event, into: &agent)
                 agents[index] = agent
                 agents.sort { $0.lastUpdated > $1.lastUpdated }
                 return
@@ -96,6 +108,7 @@ final class AgentStore: ObservableObject {
             if let task = event.task, !task.isEmpty {
                 agent.taskDescription = task
             }
+            mergeMetadata(from: event, into: &agent)
             if setStartedAt && agent.startedAt == nil {
                 agent.startedAt = now
             }
@@ -104,8 +117,9 @@ final class AgentStore: ObservableObject {
             let agent = Agent(
                 id: event.agentID,
                 providerID: event.provider,
-                name: event.metadata?["workspace"] ?? event.provider.capitalized,
+                name: displayName(for: event),
                 taskDescription: event.task,
+                workspacePath: event.metadata?["workspace"],
                 state: state,
                 lastUpdated: now,
                 startedAt: setStartedAt ? now : nil
@@ -113,6 +127,20 @@ final class AgentStore: ObservableObject {
             agents.append(agent)
         }
         agents.sort { $0.lastUpdated > $1.lastUpdated }
+    }
+
+    private func mergeMetadata(from event: AgentEvent, into agent: inout Agent) {
+        if let workspace = event.metadata?["workspace"], !workspace.isEmpty {
+            agent.workspacePath = workspace
+            agent.name = (workspace as NSString).lastPathComponent
+        }
+    }
+
+    private func displayName(for event: AgentEvent) -> String {
+        if let workspace = event.metadata?["workspace"], !workspace.isEmpty {
+            return (workspace as NSString).lastPathComponent
+        }
+        return event.provider.capitalized
     }
 
     private func removeAgent(id: String) {
