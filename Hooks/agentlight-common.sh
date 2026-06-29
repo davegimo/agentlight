@@ -85,6 +85,8 @@ workspace = (
     or data.get('cwd')
     or data.get('root')
     or (roots[0] if isinstance(roots, list) and roots else '')
+    or (data.get('tool_input') or {}).get('working_directory') if isinstance(data.get('tool_input'), dict) else None
+    or (data.get('tool_input') or {}).get('workingDirectory') if isinstance(data.get('tool_input'), dict) else None
     or ''
 )
 
@@ -146,5 +148,20 @@ print(json.dumps({
 
 send_needs_input() {
   local input="$1"
+  if [[ "$(is_auto_executed "$input")" == "true" ]]; then
+    return
+  fi
   send_event "agent_needs_input" "$input"
+}
+
+is_auto_executed() {
+  echo "$1" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    print('false')
+    raise SystemExit
+print('true' if data.get('sandbox') is True else 'false')
+" 2>/dev/null || echo "false"
 }

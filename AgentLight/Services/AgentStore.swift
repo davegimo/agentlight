@@ -6,11 +6,44 @@ final class AgentStore: ObservableObject {
 
     @Published private(set) var agents: [Agent] = []
     @Published private(set) var aggregateState: AggregateState = .idle
+    @Published private(set) var focusContext: AgentFocusContext?
 
     private var providers: [String: any AgentProvider] = [:]
     private var isReadyForNextRequest = false
+    private let focusContextKey = "AgentLight.lastFocusContext"
+    private var pendingNeedsInputTasks: [String: Task<Void, Never>] = [:]
+    private let needsInputDebounceNs: UInt64 = 450_000_000
 
-    private init() {}
+    private init() {
+        focusContext = loadFocusContext()
+    }
+
+    var canOpenFocusTarget: Bool {
+        primaryLinkableAgent() != nil || focusContext != nil
+    }
+
+    var focusActionLabel: String {
+        if let agent = primaryLinkableAgent() {
+            switch agent.state {
+            case .needsInput, .failed: return "Open in Cursor — needs you ↩"
+            case .done: return "Open in Cursor — continue ↩"
+            default: return "Open in Cursor ↩"
+            }
+        }
+        return focusContext?.openLabel ?? "Open in Cursor ↩"
+    }
+
+    func openFocusTarget() {
+        if let agent = primaryLinkableAgent() {
+            openWorkspace(for: agent)
+        } else if let focusContext {
+            WorkspaceOpener.open(context: focusContext)
+        }
+    }
+
+    func openWorkspace(for agent: Agent) {
+        WorkspaceOpener.open(agent: agent)
+    }
 
     func register(provider: any AgentProvider) {
         providers[provider.id] = provider
@@ -35,26 +68,37 @@ final class AgentStore: ObservableObject {
 
         switch event.event {
         case .agentStarted:
+            cancelPendingNeedsInput(for: event.agentID)
             isReadyForNextRequest = false
             upsertAgent(from: event, state: .working, setStartedAt: true)
         case .agentRunning:
+            if event.metadata?["phase"] == "executing" {
+                cancelPendingNeedsInput(for: event.agentID)
+            }
             upsertAgent(from: event, state: .working, setStartedAt: false, allowFromDone: false, allowFromNeedsInput: event.metadata?["phase"] == "executing")
         case .agentCompleted:
+            cancelPendingNeedsInput(for: event.agentID)
             isReadyForNextRequest = true
             upsertAgent(from: event, state: .done, setStartedAt: false)
         case .agentNeedsInput:
-            isReadyForNextRequest = false
-            upsertAgent(from: event, state: .needsInput, setStartedAt: false)
+            if event.metadata?["auto_executed"] == "true" {
+                return
+            }
+            scheduleNeedsInput(from: event)
+            return
         case .agentStopped:
+            cancelPendingNeedsInput(for: event.agentID)
             removeAgent(id: event.agentID)
             recalculateAggregate()
             return
         case .agentFailed:
+            cancelPendingNeedsInput(for: event.agentID)
             isReadyForNextRequest = false
             upsertAgent(from: event, state: .failed, setStartedAt: false)
         }
 
         recalculateAggregate()
+        updateFocusContext(from: event)
 
         if let agent = agents.first(where: { $0.id == event.agentID }),
            agent.state != previousState {
@@ -70,7 +114,86 @@ final class AgentStore: ObservableObject {
     func clearAll() {
         agents.removeAll()
         isReadyForNextRequest = false
+        focusContext = nil
+        saveFocusContext()
         recalculateAggregate()
+    }
+
+    private func scheduleNeedsInput(from event: AgentEvent) {
+        cancelPendingNeedsInput(for: event.agentID)
+        let agentID = event.agentID
+
+        pendingNeedsInputTasks[agentID] = Task {
+            try? await Task.sleep(nanoseconds: needsInputDebounceNs)
+            guard !Task.isCancelled else { return }
+            applyNeedsInput(from: event)
+            pendingNeedsInputTasks.removeValue(forKey: agentID)
+        }
+    }
+
+    private func applyNeedsInput(from event: AgentEvent) {
+        let previousState = agents.first(where: { $0.id == event.agentID })?.state
+        isReadyForNextRequest = false
+        upsertAgent(from: event, state: .needsInput, setStartedAt: false)
+        recalculateAggregate()
+        updateFocusContext(from: event)
+
+        if let agent = agents.first(where: { $0.id == event.agentID }),
+           agent.state != previousState {
+            NotificationService.shared.notify(agent: agent, settings: AppSettings.shared)
+        }
+    }
+
+    private func cancelPendingNeedsInput(for agentID: String) {
+        pendingNeedsInputTasks[agentID]?.cancel()
+        pendingNeedsInputTasks.removeValue(forKey: agentID)
+    }
+
+    private func primaryLinkableAgent() -> Agent? {
+        let linkable = agents.filter { agent in
+            guard let path = agent.workspacePath, !path.isEmpty else { return false }
+            return FileManager.default.fileExists(atPath: (path as NSString).expandingTildeInPath)
+        }
+
+        return linkable.first(where: { $0.state == .needsInput || $0.state == .failed })
+            ?? linkable.first(where: { $0.state == .done })
+            ?? linkable.first
+    }
+
+    private func updateFocusContext(from event: AgentEvent) {
+        guard let workspace = event.metadata?["workspace"], !workspace.isEmpty else { return }
+
+        let reason: AgentFocusContext.FocusReason?
+        switch event.event {
+        case .agentNeedsInput: reason = .needsInput
+        case .agentCompleted: reason = .completed
+        case .agentFailed: reason = .failed
+        default: reason = nil
+        }
+
+        guard let reason else { return }
+
+        focusContext = AgentFocusContext(
+            providerID: event.provider,
+            agentID: event.agentID,
+            workspacePath: workspace,
+            taskDescription: event.task,
+            reason: reason
+        )
+        saveFocusContext()
+    }
+
+    private func loadFocusContext() -> AgentFocusContext? {
+        guard let data = UserDefaults.standard.data(forKey: focusContextKey) else { return nil }
+        return try? JSONDecoder().decode(AgentFocusContext.self, from: data)
+    }
+
+    private func saveFocusContext() {
+        if let focusContext, let data = try? JSONEncoder().encode(focusContext) {
+            UserDefaults.standard.set(data, forKey: focusContextKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: focusContextKey)
+        }
     }
 
     private func upsertAgent(

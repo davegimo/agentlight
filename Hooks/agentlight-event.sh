@@ -20,7 +20,11 @@ if [[ -n "$AGENTLIGHT_EVENT" ]]; then
       phase="executing"
       ;;
   esac
-  send_event "$AGENTLIGHT_EVENT" "$INPUT" "$phase" &
+  if [[ "$AGENTLIGHT_EVENT" == "agent_needs_input" ]]; then
+    send_event "$AGENTLIGHT_EVENT" "$INPUT" "$phase"
+  else
+    send_event "$AGENTLIGHT_EVENT" "$INPUT" "$phase" &
+  fi
 fi
 
 # Hooks that require a response must still return valid JSON.

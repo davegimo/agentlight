@@ -6,6 +6,13 @@ struct MenuBarView: View {
     @Binding var showSettings: Bool
 
     var body: some View {
+        if store.canOpenFocusTarget {
+            Button(store.focusActionLabel) {
+                store.openFocusTarget()
+            }
+            Divider()
+        }
+
         if store.agents.isEmpty {
             if store.aggregateState == .ready {
                 Text("Ready for next request")
@@ -16,12 +23,14 @@ struct MenuBarView: View {
             }
         } else {
             ForEach(store.agents) { agent in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(agent.statusLine)
-                        .font(.system(size: 13))
-                    Text(relativeTime(agent.lastUpdated))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                if agent.workspacePath != nil {
+                    Button {
+                        store.openWorkspace(for: agent)
+                    } label: {
+                        agentRow(agent)
+                    }
+                } else {
+                    agentRow(agent)
                 }
             }
         }
@@ -41,6 +50,23 @@ struct MenuBarView: View {
 
         Button("Quit AgentLight") {
             NSApplication.shared.terminate(nil)
+        }
+    }
+
+    @ViewBuilder
+    private func agentRow(_ agent: Agent) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(agent.statusLine)
+                .font(.system(size: 13))
+            HStack(spacing: 6) {
+                Text(relativeTime(agent.lastUpdated))
+                if agent.workspacePath != nil {
+                    Text("↩ Open")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
         }
     }
 
@@ -74,6 +100,9 @@ struct SettingsView: View {
                 Text("cd Hooks && ./install.sh")
                     .font(.system(.caption, design: .monospaced))
                     .textSelection(.enabled)
+                Text("Click an agent or “Open in Cursor” to jump back to the workspace.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("About") {
@@ -84,7 +113,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 380, height: 320)
+        .frame(width: 380, height: 340)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done") { dismiss() }

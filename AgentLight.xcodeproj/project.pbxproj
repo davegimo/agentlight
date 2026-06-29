@@ -20,6 +20,9 @@
 		A1000001000000000000000B /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000B /* AppSettings.swift */; };
 		A1000001000000000000000C /* LaunchAtLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000C /* LaunchAtLogin.swift */; };
 		A1000001000000000000000D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000D /* Assets.xcassets */; };
+		A1000001000000000000000E /* AgentFocusContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000011 /* AgentFocusContext.swift */; };
+		A1000001000000000000000F /* WorkspaceOpener.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000012 /* WorkspaceOpener.swift */; };
+		A10000010000000000000010 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000013 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -39,6 +42,9 @@
 		A2000001000000000000000E /* AgentLight.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AgentLight.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000001000000000000000F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000010000000000000010 /* AgentLight.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AgentLight.entitlements; sourceTree = "<group>"; };
+		A20000010000000000000011 /* AgentFocusContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentFocusContext.swift; sourceTree = "<group>"; };
+		A20000010000000000000012 /* WorkspaceOpener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceOpener.swift; sourceTree = "<group>"; };
+		A20000010000000000000013 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -64,6 +70,7 @@
 			isa = PBXGroup;
 			children = (
 				A20000010000000000000001 /* AgentLightApp.swift */,
+				A20000010000000000000013 /* AppDelegate.swift */,
 				A40000010000000000000004 /* Models */,
 				A40000010000000000000005 /* Providers */,
 				A40000010000000000000006 /* Services */,
@@ -90,6 +97,7 @@
 				A20000010000000000000002 /* Agent.swift */,
 				A20000010000000000000003 /* AgentEvent.swift */,
 				A20000010000000000000004 /* AgentState.swift */,
+				A20000010000000000000011 /* AgentFocusContext.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -109,6 +117,7 @@
 				A20000010000000000000007 /* AgentStore.swift */,
 				A20000010000000000000008 /* EventServer.swift */,
 				A20000010000000000000009 /* NotificationService.swift */,
+				A20000010000000000000012 /* WorkspaceOpener.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -211,6 +220,9 @@
 				A1000001000000000000000A /* MenuBarView.swift in Sources */,
 				A1000001000000000000000B /* AppSettings.swift in Sources */,
 				A1000001000000000000000C /* LaunchAtLogin.swift in Sources */,
+				A1000001000000000000000E /* AgentFocusContext.swift in Sources */,
+				A1000001000000000000000F /* WorkspaceOpener.swift in Sources */,
+				A10000010000000000000010 /* AppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

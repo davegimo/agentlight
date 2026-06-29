@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct AgentLightApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = AgentStore.shared
     @StateObject private var settings = AppSettings.shared
     @State private var showSettings = false

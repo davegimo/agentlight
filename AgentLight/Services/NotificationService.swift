@@ -24,32 +24,42 @@ final class NotificationService {
             let task = agent.taskDescription ?? "task"
             send(
                 title: "\(agent.providerDisplayName) completed",
-                body: "\(agent.providerDisplayName) completed \(task)."
+                body: "\(agent.providerDisplayName) completed \(task). Click to open.",
+                agent: agent
             )
         case .needsInput:
             guard settings.notifyOnNeedsInput else { return }
             let task = agent.taskDescription ?? "your agent"
             send(
                 title: "\(agent.providerDisplayName) needs you",
-                body: "\(agent.providerDisplayName) is waiting for input on \(task)."
+                body: "\(agent.providerDisplayName) is waiting for approval on \(task). Click to open.",
+                agent: agent
             )
         case .failed:
             guard settings.notifyOnFailed else { return }
             let task = agent.taskDescription ?? "task"
             send(
                 title: "Agent failed",
-                body: "\(agent.providerDisplayName) failed on \(task)."
+                body: "\(agent.providerDisplayName) failed on \(task). Click to open.",
+                agent: agent
             )
         default:
             break
         }
     }
 
-    private func send(title: String, body: String) {
+    private func send(title: String, body: String, agent: Agent) {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
+        if let workspace = agent.workspacePath {
+            content.userInfo = [
+                "workspace": workspace,
+                "provider": agent.providerID,
+                "agent_id": agent.id,
+            ]
+        }
 
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,

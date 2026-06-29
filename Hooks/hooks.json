@@ -58,8 +58,7 @@
     ],
     "preToolUse": [
       {
-        "command": "./hooks/agentlight-needs-input.sh",
-        "matcher": "Shell|Write|Delete|Task|AskQuestion|MCP:"
+        "command": "./hooks/agentlight-needs-input.sh"
       }
     ]
   }

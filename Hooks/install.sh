@@ -42,12 +42,16 @@ existing.setdefault("hooks", {})
 
 for event, defs in incoming.get("hooks", {}).items():
     existing["hooks"].setdefault(event, [])
-    existing_commands = {
-        d.get("command") for d in existing["hooks"][event] if isinstance(d, dict)
-    }
-    for definition in defs:
-        if definition.get("command") not in existing_commands:
-            existing["hooks"][event].append(definition)
+
+    def is_agentlight(defn):
+        if not isinstance(defn, dict):
+            return False
+        return "agentlight" in defn.get("command", "")
+
+    existing["hooks"][event] = [
+        d for d in existing["hooks"][event] if not is_agentlight(d)
+    ]
+    existing["hooks"][event].extend(defs)
 
 with open(target, "w") as f:
     json.dump(existing, f, indent=2)
