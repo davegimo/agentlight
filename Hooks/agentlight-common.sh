@@ -36,6 +36,26 @@ print(data.get('failure_type') or '')
     fi
   fi
 
+  if [[ "$hook_name" == "beforeShellExecution" ]]; then
+    local sandbox
+    sandbox=$(echo "$input" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    print('false')
+    raise SystemExit
+print('true' if data.get('sandbox') is True else 'false')
+" 2>/dev/null || echo "false")
+    log_hook "$hook_name" "sandbox=$sandbox"
+    if [[ "$sandbox" == "true" ]]; then
+      echo "agent_running"
+    else
+      echo "agent_needs_input"
+    fi
+    return
+  fi
+
   map_hook_to_event "$hook_name"
 }
 
@@ -45,9 +65,6 @@ map_hook_to_event() {
     sessionEnd) echo "agent_stopped" ;;
     stop) echo "agent_completed" ;;
     postToolUseFailure) echo "agent_failed" ;;
-    beforeShellExecution)
-      echo "agent_running"
-      ;;
     beforeMCPExecution)
       echo "agent_needs_input"
       ;;

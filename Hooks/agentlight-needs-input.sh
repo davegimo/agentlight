@@ -35,6 +35,8 @@ approval_tools = {
 needs = False
 if data.get('sandbox') is True:
     needs = False
+elif tool_lower == 'shell':
+    needs = False
 elif tool_lower in approval_tools or tool.startswith('MCP:') or tool.startswith('mcp:'):
     needs = True
 elif any(x in tool_lower for x in ('websearch', 'webfetch', 'search', 'fetch')):
@@ -53,13 +55,7 @@ tool=$(echo "$result" | python3 -c "import json,sys; print(json.load(sys.stdin).
 log_hook "$HOOK_NAME" "tool=$tool needs=$needs_approval"
 
 if [[ "$needs_approval" == "true" ]]; then
-  immediate="true"
-  tool_lower=$(echo "$tool" | tr '[:upper:]' '[:lower:]')
-  # Shell auto-run fires beforeShellExecution within ms; debounce avoids red flash.
-  if [[ "$tool_lower" == "shell" ]]; then
-    immediate="false"
-  fi
-  send_needs_input "$INPUT" "$immediate" "$HOOK_NAME"
+  send_needs_input "$INPUT" "true" "$HOOK_NAME"
 fi
 
 echo '{"permission":"allow"}'

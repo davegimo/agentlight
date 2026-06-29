@@ -14,8 +14,13 @@ AGENTLIGHT_EVENT=$(resolve_hook_event "$HOOK_NAME" "$INPUT")
 
 phase=""
 case "$HOOK_NAME" in
-  postToolUse|afterShellExecution|afterMCPExecution|beforeShellExecution)
+  postToolUse|afterShellExecution|afterMCPExecution)
     phase="executing"
+    ;;
+  beforeShellExecution)
+    if [[ "$AGENTLIGHT_EVENT" == "agent_running" ]]; then
+      phase="executing"
+    fi
     ;;
 esac
 

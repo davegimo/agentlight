@@ -145,12 +145,7 @@ final class AgentStore: ObservableObject {
     private func scheduleNeedsInput(from event: AgentEvent) {
         cancelPendingNeedsInput(for: event.agentID)
 
-        let hook = event.metadata?["hook"] ?? ""
-        let tool = (event.metadata?["tool"] ?? "").lowercased()
-        let shellPreToolUse = hook == "preToolUse" && tool == "shell"
-
-        if !shellPreToolUse,
-           event.metadata?["immediate"] == "true"
+        if event.metadata?["immediate"] == "true"
             || event.metadata?["failure_type"] == "permission_denied" {
             applyNeedsInput(from: event)
             return
