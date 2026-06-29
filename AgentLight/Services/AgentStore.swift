@@ -25,12 +25,13 @@ final class AgentStore: ObservableObject {
     var focusActionLabel: String {
         if let agent = primaryLinkableAgent() {
             switch agent.state {
-            case .needsInput, .failed: return "Open in Cursor — needs you ↩"
-            case .done: return "Open in Cursor — continue ↩"
-            default: return "Open in Cursor ↩"
+            case .needsInput: return "Return to Cursor — waiting for you ↩"
+            case .failed: return "Return to Cursor — check the error ↩"
+            case .done: return "Return to Cursor — task finished ↩"
+            default: return "Return to Cursor ↩"
             }
         }
-        return focusContext?.openLabel ?? "Open in Cursor ↩"
+        return focusContext?.openLabel ?? "Return to Cursor ↩"
     }
 
     func openFocusTarget() {

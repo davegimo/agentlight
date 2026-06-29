@@ -61,7 +61,7 @@ struct MenuBarView: View {
             HStack(spacing: 6) {
                 Text(relativeTime(agent.lastUpdated))
                 if agent.workspacePath != nil {
-                    Text("↩ Open")
+                    Text("↩ Return to project")
                         .foregroundStyle(.secondary)
                 }
             }
@@ -100,7 +100,7 @@ struct SettingsView: View {
                 Text("cd Hooks && ./install.sh")
                     .font(.system(.caption, design: .monospaced))
                     .textSelection(.enabled)
-                Text("Click an agent or “Open in Cursor” to jump back to the workspace.")
+                Text("Click “Return to Cursor” to jump back to the project window.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
