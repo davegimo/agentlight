@@ -15,7 +15,7 @@ struct AgentFocusContext: Codable, Equatable, Sendable {
 
     var openLabel: String {
         switch reason {
-        case .needsInput: return "Return to Cursor — waiting for you ↩"
+        case .needsInput: return "Return to Cursor — waiting for approval ↩"
         case .completed: return "Return to Cursor — task finished ↩"
         case .failed: return "Return to Cursor — check the error ↩"
         }

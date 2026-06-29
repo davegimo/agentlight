@@ -29,8 +29,8 @@ final class NotificationService {
         case .needsInput:
             guard settings.notifyOnNeedsInput else { return }
             send(
-                title: "\(agent.workspaceFolderName) — waiting for you",
-                body: "Cursor needs your input on \(agent.workspaceFolderName). Click to open.",
+                title: "\(agent.workspaceFolderName) — waiting for approval",
+                body: "Cursor needs your approval on \(agent.workspaceFolderName). Click to open.",
                 agent: agent
             )
         case .failed:

@@ -1,7 +1,5 @@
 #!/bin/bash
 # AgentLight Cursor hook — forwards lifecycle events to the menu bar app.
-# Usage: agentlight-event.sh <hook_name>
-# Reads JSON from stdin (Cursor hook payload).
 
 set -euo pipefail
 
@@ -12,22 +10,41 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=agentlight-common.sh
 source "$SCRIPT_DIR/agentlight-common.sh"
 
-AGENTLIGHT_EVENT=$(map_hook_to_event "$HOOK_NAME")
+AGENTLIGHT_EVENT=$(resolve_hook_event "$HOOK_NAME" "$INPUT")
+
+phase=""
+case "$HOOK_NAME" in
+  postToolUse|afterShellExecution|afterMCPExecution|beforeShellExecution)
+    phase="executing"
+    ;;
+esac
+
 if [[ -n "$AGENTLIGHT_EVENT" ]]; then
-  phase=""
-  case "$HOOK_NAME" in
-    postToolUse|afterShellExecution|afterMCPExecution|beforeShellExecution|beforeMCPExecution)
-      phase="executing"
-      ;;
-  esac
-  if [[ "$AGENTLIGHT_EVENT" == "agent_needs_input" ]] || [[ "$phase" == "executing" ]]; then
-    send_event "$AGENTLIGHT_EVENT" "$INPUT" "$phase"
-  else
-    send_event "$AGENTLIGHT_EVENT" "$INPUT" "$phase" &
+  immediate="false"
+  if [[ "$AGENTLIGHT_EVENT" == "agent_needs_input" ]]; then
+    immediate="true"
   fi
+
+  log_hook "$HOOK_NAME" "event=$AGENTLIGHT_EVENT phase=$phase immediate=$immediate"
+
+  if [[ "$AGENTLIGHT_EVENT" == "agent_needs_input" ]] || [[ "$phase" == "executing" ]]; then
+    send_event "$AGENTLIGHT_EVENT" "$INPUT" "$phase" "$immediate" "$HOOK_NAME"
+  else
+    send_event "$AGENTLIGHT_EVENT" "$INPUT" "$phase" "false" "$HOOK_NAME" &
+  fi
+else
+  tool_name=$(echo "$INPUT" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    print('')
+    raise SystemExit
+print(data.get('tool_name') or data.get('toolName') or data.get('tool') or '')
+" 2>/dev/null || echo "")
+  log_hook "$HOOK_NAME" "no_event tool=$tool_name"
 fi
 
-# Hooks that require a response must still return valid JSON.
 case "$HOOK_NAME" in
   beforeShellExecution|beforeMCPExecution|subagentStart|preToolUse)
     echo '{"permission":"allow"}'

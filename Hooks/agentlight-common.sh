@@ -2,7 +2,42 @@
 # Shared helpers for AgentLight Cursor hooks.
 
 CONFIG_FILE="${HOME}/Library/Application Support/AgentLight/server.json"
+DEBUG_LOG="${HOME}/Library/Application Support/AgentLight/hook-debug.log"
 DEFAULT_PORT=47831
+
+log_hook() {
+  local hook_name="$1"
+  local message="$2"
+  mkdir -p "$(dirname "$DEBUG_LOG")"
+  echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ") [$hook_name] $message" >> "$DEBUG_LOG"
+  if [[ -f "$DEBUG_LOG" ]]; then
+    tail -n 200 "$DEBUG_LOG" > "${DEBUG_LOG}.tmp" 2>/dev/null && mv "${DEBUG_LOG}.tmp" "$DEBUG_LOG"
+  fi
+}
+
+resolve_hook_event() {
+  local hook_name="$1"
+  local input="$2"
+
+  if [[ "$hook_name" == "postToolUseFailure" ]]; then
+    local failure_type
+    failure_type=$(echo "$input" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    print('')
+    raise SystemExit
+print(data.get('failure_type') or '')
+" 2>/dev/null || echo "")
+    if [[ "$failure_type" == "permission_denied" ]]; then
+      echo "agent_needs_input"
+      return
+    fi
+  fi
+
+  map_hook_to_event "$hook_name"
+}
 
 map_hook_to_event() {
   case "$1" in
@@ -10,8 +45,11 @@ map_hook_to_event() {
     sessionEnd) echo "agent_stopped" ;;
     stop) echo "agent_completed" ;;
     postToolUseFailure) echo "agent_failed" ;;
-    beforeShellExecution|beforeMCPExecution)
+    beforeShellExecution)
       echo "agent_running"
+      ;;
+    beforeMCPExecution)
+      echo "agent_needs_input"
       ;;
     subagentStart)
       echo "agent_needs_input"
@@ -22,6 +60,7 @@ map_hook_to_event() {
     afterAgentResponse|afterFileEdit|subagentStop)
       echo "agent_running"
       ;;
+    beforeSubmitPrompt) echo "agent_started" ;;
     preToolUse) echo "" ;;
     *) echo "" ;;
   esac
@@ -94,12 +133,21 @@ workspace = (
 )
 
 tool = data.get('tool_name') or data.get('toolName') or data.get('tool') or ''
+failure_type = data.get('failure_type') or ''
+immediate_tools = {
+    'websearch', 'webfetch', 'fetch', 'askquestion', 'shell', 'write',
+    'delete', 'task', 'applypatch', 'editnotebook', 'switchmode',
+}
+tool_lower = tool.lower()
+immediate = 'true' if (tool_lower in immediate_tools or tool.startswith('MCP:') or tool.startswith('mcp:')) else 'false'
 
 print(json.dumps({
     'agent_id': str(agent_id),
     'task': str(task)[:500],
     'workspace': str(workspace)[:200],
-    'tool': str(tool)
+    'tool': str(tool),
+    'failure_type': str(failure_type),
+    'immediate': immediate
 }))
 " <<< "$1"
 }
@@ -108,17 +156,24 @@ send_event() {
   local event_type="$1"
   local input="$2"
   local phase="${3:-}"
+  local immediate="${4:-false}"
+  local hook_name="${5:-unknown}"
   local port
   port=$(read_port)
 
   local fields
   fields=$(extract_fields "$input")
 
-  local agent_id task workspace tool
+  local agent_id task workspace tool failure_type extracted_immediate
   agent_id=$(echo "$fields" | python3 -c "import json,sys; print(json.load(sys.stdin)['agent_id'])")
   task=$(echo "$fields" | python3 -c "import json,sys; print(json.load(sys.stdin)['task'])")
   workspace=$(echo "$fields" | python3 -c "import json,sys; print(json.load(sys.stdin)['workspace'])")
   tool=$(echo "$fields" | python3 -c "import json,sys; print(json.load(sys.stdin)['tool'])")
+  failure_type=$(echo "$fields" | python3 -c "import json,sys; print(json.load(sys.stdin).get('failure_type',''))")
+  extracted_immediate=$(echo "$fields" | python3 -c "import json,sys; print(json.load(sys.stdin).get('immediate','false'))")
+  if [[ "$immediate" != "true" ]]; then
+    immediate="$extracted_immediate"
+  fi
 
   local timestamp
   timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -128,11 +183,18 @@ send_event() {
 import json
 metadata = {
     'workspace': '''${workspace//\'/}''',
-    'tool': '''${tool//\'/}'''
+    'tool': '''${tool//\'/}''',
+    'hook': '''${hook_name}'''
 }
 phase = '''${phase}'''
 if phase:
     metadata['phase'] = phase
+failure_type = '''${failure_type}'''
+if failure_type:
+    metadata['failure_type'] = failure_type
+immediate = '''${immediate}'''
+if immediate == 'true':
+    metadata['immediate'] = 'true'
 print(json.dumps({
     'event': '$event_type',
     'provider': 'cursor',
@@ -151,10 +213,18 @@ print(json.dumps({
 
 send_needs_input() {
   local input="$1"
+  local immediate="${2:-false}"
+  local hook_name="${3:-preToolUse}"
   if [[ "$(is_auto_executed "$input")" == "true" ]]; then
+    log_hook "$hook_name" "skipped needs_input (sandbox)"
     return
   fi
-  send_event "agent_needs_input" "$input"
+  log_hook "$hook_name" "send needs_input immediate=$immediate"
+  if [[ "$immediate" == "true" ]]; then
+    send_event "agent_needs_input" "$input" "" "true" "$hook_name"
+  else
+    send_event "agent_needs_input" "$input" "" "false" "$hook_name"
+  fi
 }
 
 is_auto_executed() {

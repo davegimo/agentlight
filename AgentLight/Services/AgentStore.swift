@@ -14,6 +14,13 @@ final class AgentStore: ObservableObject {
     private var pendingNeedsInputTasks: [String: Task<Void, Never>] = [:]
     private let needsInputDebounceNs: UInt64 = 450_000_000
 
+    private static let executionHooks: Set<String> = [
+        "postToolUse",
+        "afterShellExecution",
+        "afterMCPExecution",
+        "beforeShellExecution",
+    ]
+
     private init() {
         focusContext = loadFocusContext()
     }
@@ -25,7 +32,7 @@ final class AgentStore: ObservableObject {
     var focusActionLabel: String {
         if let agent = primaryLinkableAgent() {
             switch agent.state {
-            case .needsInput: return "Return to Cursor — waiting for you ↩"
+            case .needsInput: return "Return to Cursor — waiting for approval ↩"
             case .failed: return "Return to Cursor — check the error ↩"
             case .done: return "Return to Cursor — task finished ↩"
             default: return "Return to Cursor ↩"
@@ -73,10 +80,21 @@ final class AgentStore: ObservableObject {
             isReadyForNextRequest = false
             upsertAgent(from: event, state: .working, setStartedAt: true)
         case .agentRunning:
-            if event.metadata?["phase"] == "executing" {
+            let isExecuting = event.metadata?["phase"] == "executing"
+            let hook = event.metadata?["hook"] ?? ""
+            let confirmsExecution = isExecuting && Self.executionHooks.contains(hook)
+
+            if confirmsExecution {
                 cancelPendingNeedsInput(for: event.agentID)
+                isReadyForNextRequest = false
             }
-            upsertAgent(from: event, state: .working, setStartedAt: false, allowFromDone: false, allowFromNeedsInput: event.metadata?["phase"] == "executing")
+            upsertAgent(
+                from: event,
+                state: .working,
+                setStartedAt: false,
+                allowFromDone: confirmsExecution,
+                allowFromNeedsInput: confirmsExecution
+            )
         case .agentCompleted:
             cancelPendingNeedsInput(for: event.agentID)
             isReadyForNextRequest = true
@@ -94,6 +112,10 @@ final class AgentStore: ObservableObject {
             return
         case .agentFailed:
             cancelPendingNeedsInput(for: event.agentID)
+            if event.metadata?["failure_type"] == "permission_denied" {
+                scheduleNeedsInput(from: event)
+                return
+            }
             isReadyForNextRequest = false
             upsertAgent(from: event, state: .failed, setStartedAt: false)
         }
@@ -122,6 +144,18 @@ final class AgentStore: ObservableObject {
 
     private func scheduleNeedsInput(from event: AgentEvent) {
         cancelPendingNeedsInput(for: event.agentID)
+
+        let hook = event.metadata?["hook"] ?? ""
+        let tool = (event.metadata?["tool"] ?? "").lowercased()
+        let shellPreToolUse = hook == "preToolUse" && tool == "shell"
+
+        if !shellPreToolUse,
+           event.metadata?["immediate"] == "true"
+            || event.metadata?["failure_type"] == "permission_denied" {
+            applyNeedsInput(from: event)
+            return
+        }
+
         let agentID = event.agentID
 
         pendingNeedsInputTasks[agentID] = Task {
@@ -133,12 +167,8 @@ final class AgentStore: ObservableObject {
     }
 
     private func applyNeedsInput(from event: AgentEvent) {
-        if agents.first(where: { $0.id == event.agentID })?.state == .working {
-            return
-        }
-
-        let previousState = agents.first(where: { $0.id == event.agentID })?.state
         isReadyForNextRequest = false
+        let previousState = agents.first(where: { $0.id == event.agentID })?.state
         upsertAgent(from: event, state: .needsInput, setStartedAt: false)
         recalculateAggregate()
         updateFocusContext(from: event)
